@@ -20,7 +20,7 @@
         code_change/3,
         terminate/2]).
 
--include_lib("elog.hrl").
+-include_lib("elog/include/elog.hrl").
 
 -define(TCP_OPTIONS, [binary, {packet, 0}, {active, true}, {reuseaddr, true}, {send_timeout, 6000}]).
 

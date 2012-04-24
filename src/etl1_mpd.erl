@@ -6,7 +6,7 @@
 
 -export([get_status_value/2]).
 
--include_lib("elog.hrl").
+-include_lib("elog/include/elog.hrl").
 -include("tl1.hrl").
 
 -import(extbif, [to_list/1, to_integer/1]).

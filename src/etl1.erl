@@ -18,7 +18,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 
--include_lib("elog.hrl").
+-include_lib("elog/include/elog.hrl").
 -include("tl1.hrl").
 
 -define(RETRIES, 2).
