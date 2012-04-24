@@ -2,7 +2,7 @@
 
 -author("hejin 11-12-19").
 
--include("elog.hrl").
+-include_lib("elog.hrl").
 
 -export([start_link/1]).
 

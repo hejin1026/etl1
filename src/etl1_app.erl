@@ -6,8 +6,6 @@
 
 -export([start/0, stop/0]).
 
--export([test_start/0]).
-
 %%%-----------------------------------------------------------------
 %%% application callbacks
 %%%-----------------------------------------------------------------
@@ -25,8 +23,3 @@ start(normal, []) ->
 
 stop(_) ->
     ok.
-
-test_start() ->
-    application:start(cryto),
-    elog:init(5, "var/log/tl1.log"),
-    start().
