@@ -24,8 +24,8 @@ init([]) ->
 
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
-    amqp:queue(Pid, <<"tl1.agent">>),
-    amqp:consume(Pid, <<"tl1.agent">>, self()),
+    amqp:queue(Channel, <<"tl1.agent">>),
+    amqp:consume(Channel, <<"tl1.agent">>, self()),
     Channel.
 
 
