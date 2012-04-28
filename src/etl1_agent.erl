@@ -60,7 +60,7 @@ handle_rpc_req(#rpc{type = tl1, msg = {tl1, Cmd, Info}} = Rpc, #state{channel = 
     {value, DeviceArea} = dataset:get_value(device_area, Info, "null"),
     Reply = etl1:input_group({DeviceManu, DeviceArea}, Cmd),
     amqp:send(Channel, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = Reply}));
-handle_rpc_req(#rpc{type = Type} = Rpc, #state{broker = Broker}) ->
+handle_rpc_req(#rpc{type = Type} = Rpc, #state{channel = Channel}) ->
     amqp:send(Channel, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = {error, {unsupport_type, Type}}}));
 handle_rpc_req(_Rpc, _State) ->
     unsupport.
