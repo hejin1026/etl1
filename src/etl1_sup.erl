@@ -9,8 +9,7 @@
 %%%-------------------------------------------------------------------
 start_link(Opts) ->
     {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-    Broker = proplists:get_value(broker, Opts, []),
-    Etl1Agent = {etl1_agent, {etl1_agent, start_link, [Broker]},
+    Etl1Agent = {etl1_agent, {etl1_agent, start_link, []},
         permanent, 10, worker, [etl1_agent]},
     Tl1Options = proplists:get_value(ems, Opts, []),
     supervisor:start_child(Sup, Etl1Agent),

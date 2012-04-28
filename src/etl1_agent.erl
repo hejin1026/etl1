@@ -4,37 +4,29 @@
 
 -include_lib("elog/include/elog.hrl").
 
--export([start_link/1]).
+-export([start_link/0]).
 
 -behavior(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3 ]).
 
--record(state, {broker, broker_opts}).
+-record(state, {channel}).
 
 -record(rpc, {type, request_id, msg, reply}).
 
-start_link(Options) ->
-    gen_server:start_link({global, ?MODULE}, ?MODULE, [Options], []).
+start_link() ->
+    gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 
+init([]) ->
+    {ok, Conn} = amqp:connect(),
+    Channel = open(Conn),
+    {ok, #state{channel = Channel}}.
 
-init([BrokerOpt]) ->
-    process_flag(trap_exit, true),
-    {ok, Broker} = connect(BrokerOpt),
-    {ok, #state{broker = Broker, broker_opts = BrokerOpt}}.
-
-connect([]) ->
-    {ok, undefined};
-connect(Opts) ->
-    Succ = fun(Pid) ->
-        amqp:queue(Pid, <<"tl1.agent">>),
-        amqp:consume(Pid, <<"tl1.agent">>, self())
-    end,
-    Fail = fun(Error) ->
-        ?ERROR("connect amqp failure: ~p", [Error]),
-        erlang:send_after(20000, self(), reconnect)
-    end,
-    amqp_client:start(tl1_agent_amqp, Opts, Succ, Fail).
+open(Conn) ->
+    {ok, Channel} = amqp:open_channel(Conn),
+    amqp:queue(Pid, <<"tl1.agent">>),
+    amqp:consume(Pid, <<"tl1.agent">>, self()),
+    Channel.
 
 
 handle_call(Req, _From, State) ->
