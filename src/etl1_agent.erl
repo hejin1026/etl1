@@ -42,34 +42,26 @@ handle_info({deliver, <<"tl1.agent">>, _, Payload}, State) ->
     handle_rpc_req(binary_to_term(Payload), State),
     {noreply, State};
 
-handle_info(reconnect, #state{broker_opts = Opts} = State) ->
-    {ok, Pid} = connect(Opts),
-    {noreply, State#state{broker = Pid}};
-
-handle_info({'EXIT', Pid, _Reason}, #state{broker = Pid} = State) ->
-    ?ERROR("amqp client is terminated: ~p", [Pid]),
-    erlang:send_after(20000, self(), reconnect),
-    {noreply, State#state{broker = undefined}};
 
 handle_info(Info, State) ->
     ?ERROR("badinfo:  ~p", [Info]),
     {noreply, State}.
 
-terminate(_Reason, #state{broker = Broker}) ->
-    amqp_client:stop(Broker).
+terminate(_Reason, #state{channel = Channel}) ->
+    amqp_client:stop(Channel).
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
 %%%%%%%%%% interface fun %%%%%%%%
-handle_rpc_req(#rpc{type = tl1, msg = {tl1, Cmd, Info}} = Rpc, #state{broker = Broker}) ->
+handle_rpc_req(#rpc{type = tl1, msg = {tl1, Cmd, Info}} = Rpc, #state{channel = Channel}) ->
     {value, DeviceManu} = dataset:get_value(device_manu, Info, "null"),
     {value, DeviceArea} = dataset:get_value(device_area, Info, "null"),
     Reply = etl1:input_group({DeviceManu, DeviceArea}, Cmd),
-    amqp:send(Broker, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = Reply}));
+    amqp:send(Channel, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = Reply}));
 handle_rpc_req(#rpc{type = Type} = Rpc, #state{broker = Broker}) ->
-    amqp:send(Broker, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = {error, {unsupport_type, Type}}}));
+    amqp:send(Channel, <<"inter.agent">>, term_to_binary(Rpc#rpc{reply = {error, {unsupport_type, Type}}}));
 handle_rpc_req(_Rpc, _State) ->
     unsupport.
         
