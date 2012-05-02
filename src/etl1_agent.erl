@@ -15,7 +15,7 @@
 -record(rpc, {type, request_id, msg, reply}).
 
 start_link() ->
-    gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
     {ok, Conn} = amqp:connect(),
@@ -25,7 +25,7 @@ init([]) ->
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
     amqp:queue(Channel, <<"tl1.agent">>),
-    amqp:consume(Channel, <<"tl1.agent">>, self()),
+    amqp:consume(Channel, <<"tl1.agent">>),
     Channel.
 
 
