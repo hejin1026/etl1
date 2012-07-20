@@ -129,7 +129,10 @@ do_init(TcpSup, Tl1Options) ->
 
 connect_tl1(TcpSup, Tl1Infos) ->
     Pids = lists:map(fun(Tl1Info) ->
-        do_connect(TcpSup, Tl1Info)
+        case do_connect(TcpSup, Tl1Info) of
+            {ok, Pid} -> Pid;
+            {error, _Error} ->[]
+        end
     end, Tl1Infos),
     lists:flatten(Pids).
 
@@ -140,10 +143,10 @@ do_connect(TcpSup, Tl1Info) ->
     case  do_connect2(TcpSup, Tl1Info) of
         {ok, Pid} ->
             etl1_tcp:shakehand(Pid),
-            [{{to_list(Type), to_list(CityId)}, Pid}];
+            {ok, [{{to_list(Type), to_list(CityId)}, Pid}]};
         {error, Error} ->
             ?ERROR("get tcp error: ~p, ~p", [Error, Tl1Info]),
-            []
+            {error, Error}
      end.
 
 do_connect2(TcpSup, Tl1Info) ->
@@ -181,15 +184,18 @@ handle_call(get_tl1_req, _From,  #state{req_id=Id, req_over=ReqOver, req_timeout
     {reply, {ok, Result}, State};
 
 handle_call({set_tl1, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
-    NewPid = do_connect(TcpSup, Tl1Info),
-    NewState = State#state{tl1_tcp = NewPid ++ Pids},
-    {reply, ok, NewState};
+    case do_connect(TcpSup, Tl1Info) of
+        {ok, NewPid} ->
+            {reply, {ok, NewPid}, State#state{tl1_tcp = NewPid ++ Pids}};
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
 
 handle_call({sync_input, Send, Type, Cmd, Timeout}, From, #state{tl1_tcp = Pids} = State) ->
     ?INFO("handle_call,Pid:~p,from:~p, Cmd,~p", [{Send, node(Send)}, From, Cmd]),
     case get_tl1_tcp(Type, Pids) of
         [] ->
-            ?ERROR("error:type:~p, state:~p",[Type,State]),
+%            ?ERROR("error:type:~p, state:~p",[Type,State]),
             {reply, {error, {no_type, Type}}, State};
         [Pid] ->
             case (catch handle_sync_input(Pid, Cmd, Timeout, From, State)) of
@@ -211,11 +217,14 @@ handle_call(Req, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%--------------------------------------------------------------------
-handle_cast({asyn_input, Type, Cmd}, #state{tl1_tcp = Pids} = State) ->
+handle_cast({asyn_input, Type, Cmd}, #state{tl1_tcp = Pids, callback = Callback} = State) ->
     ?INFO("handle_cast, Cmd,~p", [Cmd]),
     case get_tl1_tcp(Type, Pids) of
         [] ->
-            ?ERROR("error:type:~p, state:~p",[Type,State]),
+            lists:map(fun({_Name, Pid}) ->
+                Pid ! {asyn_data, {error, {no_type, Type}}}
+            end, Callback),
+%            ?ERROR("error:type:~p, state:~p",[Type,State]),
             {noreply, State};
         [Pid] ->
             handle_asyn_input(Pid, Cmd, Type, State)

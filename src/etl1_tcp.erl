@@ -31,7 +31,7 @@
 -define(MAX_CONN, 100).
 
 -record(state, {server, host, port, username, password, max_conn,
-        socket, count, tl1_table, conn_num, conn_state, login_state, rest, dict}).
+        socket, count=0, tl1_table, conn_num=0, conn_state, login_state, rest, dict=dict:new()}).
 
 -record(pct, {id, request_id, type, complete_code, en, data}).
 
@@ -104,8 +104,8 @@ do_init(Server, Args) ->
     MaxConn = proplists:get_value(max_conn, Args, ?MAX_CONN),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     %%-- We are done ---
-    {ok, #state{server = Server, host = Host, port = Port, username = Username, password = Password, max_conn = MaxConn, 
-        socket = Socket, count = 0, tl1_table = Tl1Table, conn_num = 0, conn_state = ConnState, rest = <<>>, dict = dict:new()}}.
+    {ok, #state{server = Server, host = Host, port = Port, username = Username, password = Password, max_conn = MaxConn,
+        socket = Socket, tl1_table = Tl1Table, conn_state = ConnState, rest = <<>>}}.
 
 connect(Host, Port, Username, Password) when is_binary(Host) ->
     connect(binary_to_list(Host), Port, Username, Password);
@@ -116,7 +116,7 @@ connect(Host, Port, Username, Password) ->
         login(Socket, Username, Password),
         {ok, Socket, connected};
     {error, Reason} ->
-        ?WARNING("tcp connect failure: ~p", [Reason]),
+        ?WARNING("tcp connect failure: ~p, ~p", [Reason, {Host, Port, Username, Password}]),
         {ok, null, disconnect}
     end.
 
@@ -217,7 +217,7 @@ handle_info({tcp, Sock, Bytes}, #state{socket = Sock} = State) ->
 handle_info({tcp_closed, Socket}, #state{server = Server} = State) ->
     ?ERROR("tcp close: ~p, ~p", [Socket, State]),
     Server ! {tl1_tcp_closed, self()},
-%    erlang:send_after(30000, self(), {timeout, retry_connect}).
+    erlang:send_after(30000, self(), {timeout, retry_connect}),
     {noreply, State#state{socket = null, conn_state = disconnect}};
 
 
