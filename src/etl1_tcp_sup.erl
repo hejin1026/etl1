@@ -4,7 +4,7 @@
 
 -behaviour(supervisor).
 
--export([start_link/0, start_link/1, start_child/2]).
+-export([start_link/0, start_link/1, start_child/2, delete_child/2]).
 -export([init/1]).
 
 start_link() ->
@@ -15,6 +15,10 @@ start_link(Name) ->
 
 start_child(Sup, Params) ->
     supervisor:start_child(Sup, Params).
+
+delete_child(Sup, Child) ->
+    supervisor:terminate_child(Sup, Child),
+    supervisor:delete_child(Sup, Child).
 
 init([]) ->
     {ok, {{simple_one_for_one, 0, 1},
