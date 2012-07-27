@@ -260,8 +260,9 @@ handle_info({tl1_tcp, _Tcp, Pct}, State) ->
     NState = handle_recv_tcp(Pct, State),
     {noreply, NState};
 
-%handle_info({tl1_tcp_closed, _Tcp}, State) ->
-%    {noreply, State};
+handle_info({tl1_tcp_closed, Tcp}, State) ->
+    timer:apply_after(10000, etl1_tcp, reconnect, [Tcp]),
+    {noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, #state{tl1_tcp = Pids} = State) ->
     Type = [T || {T, P} <- Pids, P == Pid],

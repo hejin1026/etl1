@@ -217,7 +217,7 @@ handle_info({tcp, Sock, Bytes}, #state{socket = Sock} = State) ->
 handle_info({tcp_closed, Socket}, #state{server = Server} = State) ->
     ?ERROR("tcp close: ~p, ~p", [Socket, State]),
     Server ! {tl1_tcp_closed, self()},
-    erlang:send_after(30000, self(), {timeout, retry_connect}),
+%    erlang:send_after(30000, self(), retry_connect),
     {noreply, State#state{socket = null, conn_state = disconnect}};
 
 
@@ -225,13 +225,8 @@ handle_info(shakehand, #state{conn_state = connected} = State) ->
     send_tcp(self(), "SHAKEHAND:::shakehand::;"),
     erlang:send_after(5 * 60 * 1000, self(), shakehand),
     {noreply, State};
-
 handle_info(shakehand, State) ->
     {noreply, State};
-
-handle_info({timeout, retry_connect},  #state{host = Host, port = Port, username = Username, password = Password} = State) ->
-    {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
-    {noreply, State#state{socket = Socket, conn_num = 0, conn_state = ConnState}};
 
 handle_info(Info, State) ->
     ?WARNING("unexpected info: ~n~p", [Info]),
@@ -241,7 +236,7 @@ prioritise_info(get_status, _State) ->
     9;
 prioritise_info(tcp_closed, _State) ->
     7;
-prioritise_info({timeout, retry_connect}, _State) ->
+prioritise_info(reconnect, _State) ->
     7;
 prioritise_info(shakehand, _State) ->
     5;
