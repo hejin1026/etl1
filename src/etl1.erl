@@ -7,7 +7,7 @@
 %% Network Interface callback functions
 -export([start_link/2,
         register_callback/1, register_callback/2,
-        set_tl1/1,
+        set_tl1/1, set_tl1_trap/1,
         get_tl1/0, get_tl1_req/0,
         input/2, input/3,
         input_group/2, input_group/3,
@@ -31,7 +31,7 @@
 
 -record(request,  {id, type, ems, data, ref, timeout, time, from}).
 
--record(state, {tl1_tcp, tl1_tcp_sup, req_id=0, req_type, req_over=0, req_timeout_over=0, callback=[]}).
+-record(state, {sender, tl1_tcp, tl1_tcp_sup, req_id=0, req_type, req_over=0, req_timeout_over=0, callback=[]}).
 
 %%%-------------------------------------------------------------------
 %%% API
@@ -56,6 +56,9 @@ get_tl1_req() ->
 set_tl1(Tl1Info) ->
     ?WARNING("set tl1 info....~p",[Tl1Info]),
     gen_server:call(?MODULE, {set_tl1, Tl1Info}, ?CALL_TIMEOUT).
+
+set_tl1_trap(Tl1Info) ->
+    gen_server:call(?MODULE, {set_tl1_trap, self(), Tl1Info}, ?CALL_TIMEOUT).
 
 %%Cmd = LST-ONUSTATE::OLTID=${oltid},PORTID=${portid}:CTAG::;
 input(Type, Cmd) ->
@@ -140,7 +143,7 @@ do_connect(TcpSup, Tl1Info) ->
     ?INFO("get tl1 info:~p", [Tl1Info]),
     Type = proplists:get_value(manu, Tl1Info),
     CityId = proplists:get_value(cityid, Tl1Info, <<"">>),
-    case  do_connect2(TcpSup, Tl1Info) of
+    case do_connect2(TcpSup, Tl1Info) of
         {ok, Pid} ->
             etl1_tcp:shakehand(Pid),
             {ok, [{{to_list(Type), to_list(CityId)}, Pid}]};
@@ -191,11 +194,22 @@ handle_call({set_tl1, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpS
             {reply, {error, Error}, State}
     end;
 
+handle_call({set_tl1_trap, Sender, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
+    case do_connect(TcpSup, Tl1Info) of
+        {ok, NewPid} ->
+            begin_recv_trap(NewPid),
+            {reply, {ok, NewPid}, State#state{sender = Sender, tl1_tcp = NewPid ++ Pids}};
+        {error, {already_started, Pid}} ->
+            begin_recv_trap(Pid),
+            {reply, {error, {already_started, Pid}}, State#state{sender = Sender}};
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
+
 handle_call({sync_input, Send, Type, Cmd, Timeout}, From, #state{tl1_tcp = Pids} = State) ->
     ?INFO("handle_call,Pid:~p,from:~p, Cmd,~p", [{Send, node(Send)}, From, Cmd]),
     case get_tl1_tcp(Type, Pids) of
         [] ->
-%            ?ERROR("error:type:~p, state:~p",[Type,State]),
             {reply, {error, {no_type, Type}}, State};
         [Pid] ->
             case (catch handle_sync_input(Pid, Cmd, Timeout, From, State)) of
@@ -259,6 +273,10 @@ handle_info({tl1_error, Pct, Reason}, State) ->
 handle_info({tl1_tcp, _Tcp, Pct}, State) ->
     NState = handle_recv_tcp(Pct, State),
     {noreply, NState};
+
+handle_info({tl1_trap, Tcp, Pct}, #state{sender = Sender} = State) ->
+    Sender ! {tl1_trap, Tcp, Pct},
+    {noreply, State};
 
 handle_info({tl1_tcp_closed, Tcp}, State) ->
     timer:apply_after(10000, etl1_tcp, reconnect, [Tcp]),
@@ -419,3 +437,5 @@ get_tl1_tcp({Type, City}, Pids) ->
             [lists:nth(random:uniform(length(GetPids)), GetPids)]
     end.
 
+begin_recv_trap(Pid) ->
+    etl1_tcp:send_tcp(Pid, "SUBSCRIBE:::subscribe::;").
