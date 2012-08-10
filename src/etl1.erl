@@ -64,8 +64,7 @@ set_tl1_trap(Tl1Info) ->
 input(Type, Cmd) ->
     input(Type, Cmd, ?REQ_TIMEOUT).
 
-
-input(Type, Cmd, Timeout) when is_tuple(Type)->
+input(Type, Cmd, Timeout) when is_tuple(Type) and is_list(Cmd) ->
     case gen_server:call(?MODULE, {sync_input, self(), Type, Cmd, Timeout}, ?CALL_TIMEOUT) of
         {ok, {_CompCode, Data}, _} ->
             %Data :{ok , [Values]} | {ok, [[{en, En},{endesc, Endesc}]]}
@@ -81,6 +80,9 @@ input(Type, Cmd, Timeout) when is_tuple(Type)->
             %{'EXIT',{badarith,_}}
             {error, Error}
 	end;
+input(Type, {CmdDef, VarList}, Timeout) ->
+    NCmd = varstr:eval(CmdDef, VarList),
+    input(Type, NCmd, Timeout);
 input(Type, Cmd, Timeout) ->
     input({Type, ""}, Cmd, Timeout).
 
@@ -238,7 +240,6 @@ handle_cast({asyn_input, Type, Cmd}, #state{tl1_tcp = Pids, callback = Callback}
             lists:map(fun({_Name, Pid}) ->
                 Pid ! {asyn_data, {error, {no_type, Type}}}
             end, Callback),
-%            ?ERROR("error:type:~p, state:~p",[Type,State]),
             {noreply, State};
         [Pid] ->
             handle_asyn_input(Pid, Cmd, Type, State)
@@ -281,6 +282,12 @@ handle_info({tl1_trap, Tcp, Pct}, #state{sender = Sender} = State) ->
 handle_info({tl1_tcp_closed, Tcp}, State) ->
     timer:apply_after(10000, etl1_tcp, reconnect, [Tcp]),
     {noreply, State};
+
+handle_info({reconn_fail, Tcp}, #state{tl1_tcp = Pids} = State) ->
+    ?ERROR("reconn fail:~p", [State]),
+    exit(Tcp, "reconn fail"),
+    NewPids = [{Type, Pid}||{Type, Pid} <- Pids, Pid =/= Tcp],
+    {noreply, State#state{tl1_tcp=NewPids}};
 
 handle_info({'EXIT', Pid, Reason}, #state{tl1_tcp = Pids} = State) ->
     Type = [T || {T, P} <- Pids, P == Pid],

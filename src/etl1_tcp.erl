@@ -146,9 +146,15 @@ login_again(Socket, Username, Password) ->
 handle_call(get_status, _From, #state{tl1_table = Tl1Table, conn_num = ConnNum} = State) ->
     {reply, {ok, [{count, ets:info(Tl1Table, size), ConnNum}, State]}, State};
 
-handle_call(reconnect, _From, #state{host = Host, port = Port, username = Username, password = Password} = State) ->
+handle_call(reconnect, _From, #state{server = Server,host = Host, port = Port, username = Username, password = Password}
+    = State) ->
     ?INFO("reconnect :~p", [State]),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
+    case ConnState of
+        disconnect ->
+            Server ! {reconn_fail, self()};
+        _ -> ok
+    end,
     {reply, ConnState, State#state{socket = Socket, conn_num = 0, conn_state = ConnState}};
 
 handle_call(stop, _From, State) ->
