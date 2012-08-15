@@ -150,9 +150,8 @@ handle_call(reconnect, _From, #state{server=Server,host=Host, port=Port, usernam
     ?INFO("reconnect :~p", [State]),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     case ConnState of
-        disconnect ->
-            Server ! {reconn_fail, self()};
-        _ -> ok
+        disconnect -> Server ! {reconnect, fail, self()};
+        connected -> Server ! {reconnect, succ, self()}
     end,
     {reply, ConnState, State#state{socket = Socket, conn_num = 0, conn_state = ConnState}};
 
@@ -429,8 +428,8 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
             ?INFO("send tl1_tcp reqid:~p", [ReqId]),
             State#state{conn_num = check_tl1_table(State), dict = dict:erase(ReqId, Dict)};
         Error ->
-            ?ERROR("processing of received message failed: ~n ~p", [Error]),
-            State
+            ?ERROR("processing of received message failed: ~p,~p", [Socket,Error]),
+            State#state{conn_num = check_tl1_table(State), dict = dict:new()}
     end.
 
 get_next_id(Id) ->

@@ -20,13 +20,17 @@ process_msg(MsgData) when is_binary(MsgData) ->
     Lines = string:tokens(to_list(MsgData), "\r\n"),
     process_msg(Lines);
 
-process_msg(Lines) ->
-    ?INFO("get respond splite :~p", [Lines]),
+process_msg(Lines0) ->
+    ?INFO("get respond splite :~p", [Lines0]),
+    Lines = check(Lines0),
     _Header = lists:nth(1, Lines),
     RespondId = lists:nth(2, Lines),
     {ReqLevel, ReqId, CompletionCode} = get_response_id(RespondId),
     RespondBlock = lists:nthtail(2, Lines),
     process_msg({CompletionCode, ReqId, ReqLevel}, RespondBlock, Lines).
+
+check(["<IP"++_,"<"|Lines]) -> Lines;
+check(Lines) ->Lines.
 
  process_msg({"ALARM", ReqId, TrapLevel}, RespondBlock, _Lines) ->
     TrapData = get_trap_body(TrapLevel, RespondBlock),

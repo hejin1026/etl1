@@ -27,6 +27,8 @@
 
 -define(CALL_TIMEOUT, 300000).
 
+-define(MAX_RECONN_NO, 60).
+
 -import(extbif, [to_list/1, to_binary/1, to_integer/1]).
 
 -record(request,  {id, type, ems, data, ref, timeout, time, from}).
@@ -280,14 +282,30 @@ handle_info({tl1_trap, Tcp, Pct}, #state{sender = Sender} = State) ->
     {noreply, State};
 
 handle_info({tl1_tcp_closed, Tcp}, State) ->
-    timer:apply_after(10000, etl1_tcp, reconnect, [Tcp]),
+    timer:apply_after(60000, etl1_tcp, reconnect, [Tcp]),
     {noreply, State};
 
-handle_info({reconn_fail, Tcp}, #state{tl1_tcp = Pids} = State) ->
+handle_info({reconnect, succ, Tcp}, State) ->
+    erase({reconn_no, Tcp}),
+    {noreply, State};
+
+handle_info({reconnect, fail, Tcp}, #state{tl1_tcp = Pids} = State) ->
     ?ERROR("reconn fail:~p", [State]),
-    exit(Tcp, "reconn fail"),
-    NewPids = [{Type, Pid}||{Type, Pid} <- Pids, Pid =/= Tcp],
-    {noreply, State#state{tl1_tcp=NewPids}};
+    case get({reconn_no, Tcp}) of
+        undefined ->
+            put({reconn_no, Tcp}, 1);
+        No ->
+            if No > ?MAX_RECONN_NO ->
+                exit(Tcp, "reconn fail"),
+                erase({reconn_no, Tcp}),
+                NewPids = [{Type, Pid}||{Type, Pid} <- Pids, Pid =/= Tcp],
+                {noreply, State#state{tl1_tcp=NewPids}};
+              true ->
+                put({reconn_no, Tcp}, No + 1),
+                timer:apply_after(No * 60000, etl1_tcp, reconnect, [Tcp]),
+                {noreply, State}
+            end
+    end;
 
 handle_info({'EXIT', Pid, Reason}, #state{tl1_tcp = Pids} = State) ->
     Type = [T || {T, P} <- Pids, P == Pid],
