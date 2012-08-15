@@ -148,7 +148,7 @@ do_connect(TcpSup, Tl1Info) ->
     case do_connect2(TcpSup, Tl1Info) of
         {ok, Pid} ->
             etl1_tcp:shakehand(Pid),
-            {ok, [{{to_list(Type), to_list(CityId)}, Pid}]};
+            {ok, {{to_list(Type), to_list(CityId)}, Pid}};
         {error, Error} ->
             ?ERROR("get tcp error: ~p, ~p", [Error, Tl1Info]),
             {error, Error}
@@ -191,16 +191,16 @@ handle_call(get_tl1_req, _From,  #state{req_id=Id, req_over=ReqOver, req_timeout
 handle_call({set_tl1, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
     case do_connect(TcpSup, Tl1Info) of
         {ok, NewPid} ->
-            {reply, {ok, NewPid}, State#state{tl1_tcp = NewPid ++ Pids}};
+            {reply, {ok, NewPid}, State#state{tl1_tcp = [NewPid|Pids]}};
         {error, Error} ->
             {reply, {error, Error}, State}
     end;
 
 handle_call({set_tl1_trap, Sender, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
     case do_connect(TcpSup, Tl1Info) of
-        {ok, NewPid} ->
+        {ok, {_Key, NewPid} = TcpPid} ->
             begin_recv_trap(NewPid),
-            {reply, {ok, NewPid}, State#state{sender = Sender, tl1_tcp = NewPid ++ Pids}};
+            {reply, {ok, NewPid}, State#state{sender = Sender, tl1_tcp = [TcpPid | Pids]}};
         {error, {already_started, Pid}} ->
             begin_recv_trap(Pid),
             {reply, {error, {already_started, Pid}}, State#state{sender = Sender}};
