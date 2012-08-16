@@ -429,7 +429,7 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
             State#state{conn_num = check_tl1_table(State), dict = dict:erase(ReqId, Dict)};
         Error ->
             ?ERROR("processing of received message failed: ~p,~p", [Socket,Error]),
-            State#state{conn_num = check_tl1_table(State), dict = dict:new()}
+            State#state{conn_num = check_tl1_table(State)}
     end.
 
 get_next_id(Id) ->

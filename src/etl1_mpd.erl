@@ -30,6 +30,7 @@ process_msg(Lines0) ->
     process_msg({CompletionCode, ReqId, ReqLevel}, RespondBlock, Lines).
 
 check(["<IP"++_,"<"|Lines]) -> Lines;
+check(["IP"++_,"<"|Lines]) -> Lines;
 check(Lines) ->Lines.
 
  process_msg({"ALARM", ReqId, TrapLevel}, RespondBlock, _Lines) ->
