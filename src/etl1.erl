@@ -201,10 +201,8 @@ handle_call({set_tl1, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpS
 handle_call({set_tl1_trap, Sender, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
     case do_connect(TcpSup, Tl1Info) of
         {ok, {_Key, NewPid} = TcpPid} ->
-            begin_recv_trap(NewPid),
             {reply, {ok, NewPid}, State#state{sender = Sender, tl1_tcp = [TcpPid | Pids]}};
         {error, {already_started, Pid}} ->
-            begin_recv_trap(Pid),
             {reply, {error, {already_started, Pid}}, State#state{sender = Sender}};
         {error, Error} ->
             {reply, {error, Error}, State}
@@ -461,6 +459,3 @@ get_tl1_tcp({Type, City}, Pids) ->
         true ->
             [lists:nth(random:uniform(length(GetPids)), GetPids)]
     end.
-
-begin_recv_trap(Pid) ->
-    etl1_tcp:send_tcp(Pid, "SUBSCRIBE:::subscribe::;").
