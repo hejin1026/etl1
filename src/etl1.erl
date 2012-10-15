@@ -291,7 +291,8 @@ handle_info({reconnect, fail, Tcp}, #state{tl1_tcp = Pids} = State) ->
     ?ERROR("reconn fail:~p", [State]),
     case get({reconn_no, Tcp}) of
         undefined ->
-            put({reconn_no, Tcp}, 1);
+            put({reconn_no, Tcp}, 1),
+            {noreply, State};
         No ->
             if No > ?MAX_RECONN_NO ->
                 exit(Tcp, "reconn fail"),
