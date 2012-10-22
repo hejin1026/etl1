@@ -27,7 +27,7 @@
 
 -define(CALL_TIMEOUT, 300000).
 
--define(MAX_RECONN_NO, 60).
+-define(MAX_RECONN_NO, 50).
 
 -import(extbif, [to_list/1, to_binary/1, to_integer/1]).
 
@@ -284,6 +284,7 @@ handle_info({tl1_tcp_closed, Tcp}, State) ->
     {noreply, State};
 
 handle_info({reconnect, succ, Tcp}, State) ->
+    ?ERROR("reconnect succ for erase tcp:~p", [Tcp]),
     erase({reconn_no, Tcp}),
     {noreply, State};
 
@@ -301,6 +302,7 @@ handle_info({reconnect, fail, Tcp}, #state{tl1_tcp = Pids} = State) ->
                 {noreply, State#state{tl1_tcp=NewPids}};
               true ->
                 put({reconn_no, Tcp}, No + 1),
+                ?INFO("reconnect no :~p, tcp:~p", [No, Tcp]),
                 timer:apply_after(No * 60000, etl1_tcp, reconnect, [Tcp]),
                 {noreply, State}
             end
