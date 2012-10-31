@@ -104,12 +104,6 @@ do_init(Server, Args) ->
     MaxConn = proplists:get_value(max_conn, Args, ?MAX_CONN),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     %%-- We are done ---
-    case ConnState of
-        disconnect ->
-            Server ! {reconnect, fail, self()};
-        connected ->
-            Server ! {reconnect, succ, self()}
-    end,
     {ok, #state{server = Server, host = Host, port = Port, username = Username, password = Password, max_conn = MaxConn,
         socket = Socket, tl1_table = Tl1Table, conn_state = ConnState, rest = <<>>}}.
 
