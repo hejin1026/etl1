@@ -147,7 +147,7 @@ handle_call(get_status, _From, #state{tl1_table = Tl1Table, conn_num = ConnNum} 
     {reply, {ok, [{count, ets:info(Tl1Table, size), ConnNum}, State]}, State};
 
 handle_call(reconnect, _From, #state{server=Server,host=Host, port=Port, username=Username, password=Password} = State) ->
-    ?INFO("reconnect :~p", [State]),
+%    ?INFO("reconnect :~p", [State]),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     case ConnState of
         disconnect -> 
