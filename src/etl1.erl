@@ -26,10 +26,10 @@
 -define(REQ_TIMEOUT, 60000).
 
 -define(RECONN_TIME, 10000).
+-define(MAX_RECONN_NO, 60).
 
 -define(CALL_TIMEOUT, 300000).
 
--define(MAX_RECONN_NO, 600).
 
 -import(extbif, [to_list/1, to_binary/1, to_integer/1]).
 
@@ -282,7 +282,7 @@ handle_info({tl1_trap, Tcp, Pct}, #state{sender = Sender} = State) ->
     {noreply, State};
 
 handle_info({tl1_tcp_closed, Tcp}, State) ->
-    timer:apply_after(6000, etl1_tcp, reconnect, [Tcp]),
+    timer:apply_after(3000, etl1_tcp, reconnect, [Tcp]),
     {noreply, State};
 
 handle_info({reconnect, succ, Tcp}, State) ->

@@ -222,7 +222,7 @@ handle_info({tcp, Sock, Bytes}, #state{socket = Sock} = State) ->
     ?INFO("received tcp ~p ", [Bytes]),
     {noreply, check_bytes(Bytes, State)};
 
-handle_info({tcp_closed, Socket}, #state{server = Server} = State) ->
+handle_info({tcp_closed, Socket}, #state{server = Server, socket = Socket} = State) ->
     ?ERROR("tcp close: ~p, ~p", [Socket, State]),
     Server ! {tl1_tcp_closed, self()},
 %    erlang:send_after(30000, self(), retry_connect),
@@ -237,7 +237,7 @@ handle_info(shakehand, State) ->
     {noreply, State};
 
 handle_info(Info, State) ->
-    ?WARNING("unexpected info: ~n~p", [Info]),
+    ?WARNING("unexpected info: ~p, ~n ~p", [Info, State]),
     {noreply, State}.
 
 prioritise_info(get_status, _State) ->
