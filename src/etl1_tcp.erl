@@ -24,11 +24,13 @@
 
 -define(TCP_OPTIONS, [binary, {packet, 0}, {active, true}, {reuseaddr, true}, {send_timeout, 6000}]).
 
--define(TIMEOUT, 12000).
+-define(SHAKEHAND_TIME, 10 * 60 * 1000).
+-define(TIMEOUT, 3000).
 
 -define(USERNAME, "root").
 -define(PASSWORD, "public").
 -define(MAX_CONN, 100).
+
 
 -record(state, {server, host, port, username, password, max_conn,
         socket, count=0, tl1_table, conn_num=0, conn_state, login_state, rest, dict=dict:new()}).
@@ -231,7 +233,7 @@ handle_info({tcp_closed, Socket}, #state{server = Server, socket = Socket} = Sta
 
 handle_info(shakehand, #state{conn_state = connected} = State) ->
     send_tcp(self(), "SHAKEHAND:::shakehand::;"),
-    erlang:send_after(5 * 60 * 1000, self(), shakehand),
+    erlang:send_after(?SHAKEHAND_TIME, self(), shakehand),
     {noreply, State};
 handle_info(shakehand, State) ->
     {noreply, State};
@@ -420,7 +422,7 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
                 {ok, Data} ->
                     case dict:find(ReqId, Dict) of
                         {ok, Data0} ->
-							?WARNING("find reqid: ~p, ~p", [ReqId, Data0]),
+							?INFO("find reqid: ~p, ~p", [ReqId, Data0]),
                             {ok, Data0 ++ Data};
                         error ->
                             {ok, Data}

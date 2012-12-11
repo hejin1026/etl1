@@ -26,7 +26,7 @@
 -define(REQ_TIMEOUT, 60000).
 
 -define(RECONN_TIME, 10000).
--define(MAX_RECONN_NO, 60).
+-define(MAX_RECONN_NO, 600).
 
 -define(CALL_TIMEOUT, 300000).
 

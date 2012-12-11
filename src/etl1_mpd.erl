@@ -17,7 +17,7 @@
 %   M  CTAG DENY
 process_msg(MsgData) when is_binary(MsgData) ->
 %    ?INFO("get respond :~p", [MsgData]),
-    Lines = string:tokens(to_list(MsgData), "\r\n"),
+    Lines = string:tokens(string:strip(to_list(MsgData)), "\r\n"),
     process_msg(Lines);
 
 process_msg(Lines0) ->
