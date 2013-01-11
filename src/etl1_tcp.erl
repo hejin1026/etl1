@@ -24,7 +24,7 @@
 
 -define(TCP_OPTIONS, [binary, {packet, 0}, {active, true}, {reuseaddr, true}, {send_timeout, 6000}]).
 
--define(SHAKEHAND_TIME, 10 * 60 * 1000).
+-define(SHAKEHAND_TIME, 5 * 60 * 1000).
 -define(TIMEOUT, 3000).
 
 -define(USERNAME, "root").
@@ -232,6 +232,7 @@ handle_info({tcp_closed, Socket}, #state{server = Server, socket = Socket} = Sta
 
 
 handle_info(shakehand, #state{conn_state = connected} = State) ->
+    ?INFO("shakehand:~p",[State]),
     send_tcp(self(), "SHAKEHAND:::shakehand::;"),
     erlang:send_after(?SHAKEHAND_TIME, self(), shakehand),
     {noreply, State};

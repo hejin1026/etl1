@@ -115,9 +115,9 @@ get_response_data(Block) ->
     {TotalPackageNo, Block0} = get_response_data("total_blocks=", Block),
     {CurrPackageNo, Block1} = get_response_data("block_number=", Block0),
     {PackageRecordsNo, Block2} = get_response_data("block_records=", Block1),
-%%  Title  = "list |List |LST ..."
-    {Title, Block3} = get_response_data(fields, Block2),
-    {_SpliteLine, Block4} = get_response_data("---", Block3),
+%%    TitlePre  = "list |List |LST ..."
+%%    {Title, Block3} = get_response_data(TitlePre, Block2),
+    {_SpliteLine, Block4} = get_response_util_data("---", Block2),
 %    ?INFO("get response:~p", [{TotalPackageNo, CurrPackageNo, PackageRecordsNo, Title}]),
     case get_response_data(fields, Block4) of
 			{fields, []} ->
@@ -177,6 +177,15 @@ get_response_data(Name, [Line|Response]) ->
             {Value, Response}
         end.
 
+get_response_util_data(Pre, []) ->
+    {Pre, []};
+get_response_util_data(Pre, [Line|Response]) ->
+    case re:run(Line, Pre) of
+        nomatch ->
+            get_response_util_data(Pre, Response);
+        {match, _N} ->
+            {Line, Response}
+    end.
 
 to_tuple_records(_Fields, []) ->
 	[[]];
