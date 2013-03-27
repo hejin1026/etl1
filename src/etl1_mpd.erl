@@ -191,7 +191,7 @@ to_tuple_records(_Fields, []) ->
 	[[]];
 to_tuple_records(Fields, Records) ->
 	[to_tuple_record(Fields, Record) || Record <- Records].
-	
+
 to_tuple_record(Fields, Record) when length(Fields) =< length(Record) ->
 	to_tuple_record(Fields, Record, []);
 to_tuple_record(Fields, Record) ->

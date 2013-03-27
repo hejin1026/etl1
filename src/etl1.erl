@@ -200,6 +200,7 @@ handle_call({set_tl1, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpS
             {reply, {error, Error}, State}
     end;
 
+%unuse
 handle_call({set_tl1_trap, Sender, Tl1Info}, _From, #state{tl1_tcp = Pids, tl1_tcp_sup = TcpSup} = State) ->
     case do_connect(TcpSup, Tl1Info) of
         {ok, {_Key, NewPid} = TcpPid} ->
@@ -287,6 +288,7 @@ handle_info({tl1_tcp_closed, Tcp}, State) ->
 
 handle_info({reconnect, succ, Tcp}, State) ->
     ?ERROR("reconnect succ for erase tcp:~p", [Tcp]),
+    etl1_tcp:shakehand(Tcp),
     erase({reconn_no, Tcp}),
     {noreply, State};
 
@@ -403,7 +405,7 @@ handle_tl1_error(Tcp, Reason, _State) ->
     ?ERROR("tl1 error: ~p, ~p",[Tcp, Reason]).
 
 %% receive
-handle_recv_tcp(#pct{request_id = ReqId, type = 'output', complete_code = CompCode, data = Data} = _Pct,  
+handle_recv_tcp(#pct{request_id = ReqId, type = 'output', complete_code = CompCode, data = Data} = _Pct,
     #state{callback = Callback, req_over = ReqOver, req_timeout_over = ReqTimeoutOver} = State) ->
 %    ?INFO("recv tcp reqid:~p, code:~p, data:~p",[ReqId, CompCode, Data]),
     case ets:lookup(tl1_request_table, to_integer(ReqId)) of

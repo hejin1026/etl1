@@ -152,7 +152,7 @@ handle_call(reconnect, _From, #state{server=Server,host=Host, port=Port, usernam
 %    ?INFO("reconnect :~p", [State]),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     case ConnState of
-        disconnect -> 
+        disconnect ->
             ?ERROR("reconnect fail, tcp:~p, ~p", [self(),State]),
             Server ! {reconnect, fail, self()};
         connected ->
@@ -232,7 +232,7 @@ handle_info({tcp_closed, Socket}, #state{server = Server, socket = Socket} = Sta
 
 
 handle_info(shakehand, #state{conn_state = connected} = State) ->
-    ?INFO("shakehand:~p",[State]),
+    ?INFO("send shakehand:~p, ~p",[self(),State]),
     send_tcp(self(), "SHAKEHAND:::shakehand::;"),
     erlang:send_after(?SHAKEHAND_TIME, self(), shakehand),
     {noreply, State};
@@ -325,7 +325,7 @@ check_byte(Data, State) when is_list(Data)->
     lists:foldl(fun(Byte, NewState) ->
         check_byte(Byte, NewState)
     end, State, Data);
-check_byte(Byte, State) ->    
+check_byte(Byte, State) ->
     NowByte = binary:split(Byte, <<">">>, [global]),
     {OtherByte, [LastByte]} = lists:split(length(NowByte)-1, NowByte),
     handle_recv_msg(LastByte, handle_recv_wait(OtherByte, State)).
@@ -343,14 +343,14 @@ tcp_send(Sock, Cmd) ->
 	ok ->
 	    succ;
 	Error ->
-	    ?ERROR("failed sending message to ~n   ~p",[Error]), 
+	    ?ERROR("failed sending message to ~n   ~p",[Error]),
         fail
     end.
 
 tcp_send(Server, Sock, #pct{data = Data} = Pct) ->
     case (catch gen_tcp:send(Sock, Data)) of
 	ok ->
-	    ?INFO("send cmd  to :~p", [Data]),
+	    ?INFO("send cmd  to :~p,~p", [self(),Data]),
 	    succ;
 	{error, Reason} ->
 	    ?ERROR("failed sending message to ~p",[Reason]),
@@ -409,7 +409,7 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
             end,
             login_state(self(), LoginState),
             State;
-            
+
         {ok, #pct{type = 'alarm', data = {ok, Data}} = Pct}  ->
             Server ! {tl1_trap, self(), Pct#pct{data = Data}},
             State;
