@@ -72,7 +72,7 @@ input(Type, Cmd, Timeout) when is_tuple(Type) and is_list(Cmd) ->
     case gen_server:call(?MODULE, {sync_input, self(), Type, Cmd, Timeout}, ?CALL_TIMEOUT) of
         {ok, {_CompCode, Data}, _} ->
             %Data :{ok , [Values]} | {ok, [[{en, En},{endesc, Endesc}]]}
-            %send after : {error, {tl1_cmd_error, [{en, En},{endesc, Endesc},{reason, Reason}]}}
+            %send after : {error, {tl1_cmd_error, [{en, En},{endesc, Endesc},{reason, Reason}]}}|{error, need_field}
             Data;
         {error, Reason} ->
             %send before: {error, {invalid_request, Req}} | {error, no_ctag} | {error, {no_type, Type}}
@@ -288,7 +288,7 @@ handle_info({tl1_tcp_closed, Tcp}, State) ->
 
 handle_info({reconnect, succ, Tcp}, State) ->
     ?ERROR("reconnect succ for erase tcp:~p", [Tcp]),
-    etl1_tcp:shakehand(Tcp),
+    etl1_tcp:check_shakehand(Tcp),
     erase({reconn_no, Tcp}),
     {noreply, State};
 
@@ -405,7 +405,7 @@ handle_tl1_error(Tcp, Reason, _State) ->
     ?ERROR("tl1 error: ~p, ~p",[Tcp, Reason]).
 
 %% receive
-handle_recv_tcp(#pct{request_id = ReqId, type = 'output', complete_code = CompCode, data = Data} = _Pct,
+handle_recv_tcp(#pct{request_id = ReqId, type = 'output', complete_code = CompCode, data = Data} = _Pct,  
     #state{callback = Callback, req_over = ReqOver, req_timeout_over = ReqTimeoutOver} = State) ->
 %    ?INFO("recv tcp reqid:~p, code:~p, data:~p",[ReqId, CompCode, Data]),
     case ets:lookup(tl1_request_table, to_integer(ReqId)) of

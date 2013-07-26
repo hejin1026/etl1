@@ -7,7 +7,7 @@
 %% Network Interface callback functions
 -export([start_link/2, start_link/3,
         get_status/1,
-        shakehand/1,
+        shakehand/1, check_shakehand/1,
         send_tcp/2,
         reconnect/1]).
 
@@ -21,21 +21,22 @@
         terminate/2]).
 
 -include_lib("elog/include/elog.hrl").
+-include("tl1.hrl").
 
 -define(TCP_OPTIONS, [binary, {packet, 0}, {active, true}, {reuseaddr, true}, {send_timeout, 6000}]).
 
 -define(SHAKEHAND_TIME, 5 * 60 * 1000).
 -define(TIMEOUT, 3000).
 
--define(USERNAME, "root").
--define(PASSWORD, "public").
 -define(MAX_CONN, 100).
 
 
 -record(state, {server, host, port, username, password, max_conn,
-        socket, count=0, tl1_table, conn_num=0, conn_state, login_state, rest, dict=dict:new()}).
-
--record(pct, {id, request_id, type, complete_code, en, data}).
+        socket,  % null | S
+        count=0, tl1_table, conn_num=0,
+        conn_state, %  disconnect | connected
+        login_state, % undefined | succ | fail | ignore
+        rest, dict=dict:new()}).
 
 -import(dataset, [get_value/2, get_value/3]).
 
@@ -60,6 +61,9 @@ get_status(Pid) ->
 
 shakehand(Pid) ->
     Pid ! shakehand.
+
+check_shakehand(Pid) ->
+    Pid ! check_shakehand.
 
 send_tcp(Pid, {ReqId, Cmd}) ->
     Pct = #pct{request_id = ReqId,
@@ -101,13 +105,14 @@ do_init(Server, Args) ->
     %% -- Socket --
     Host = proplists:get_value(host, Args),
     Port = proplists:get_value(port, Args),
-    Username = proplists:get_value(username, Args, ?USERNAME),
-    Password = proplists:get_value(password, Args, ?PASSWORD),
+    Username = proplists:get_value(username, Args, undefined),
+    Password = proplists:get_value(password, Args, undefined),
     MaxConn = proplists:get_value(max_conn, Args, ?MAX_CONN),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     %%-- We are done ---
     {ok, #state{server = Server, host = Host, port = Port, username = Username, password = Password, max_conn = MaxConn,
         socket = Socket, tl1_table = Tl1Table, conn_state = ConnState, rest = <<>>}}.
+
 
 connect(Host, Port, Username, Password) when is_binary(Host) ->
     connect(binary_to_list(Host), Port, Username, Password);
@@ -122,6 +127,8 @@ connect(Host, Port, Username, Password) ->
         {ok, null, disconnect}
     end.
 
+login(_Socket, undefined, undefined) ->
+    login_state(self(), ignore);
 login(Socket, Username, Password) when is_binary(Username)->
     login(Socket, binary_to_list(Username), Password);
 login(Socket, Username, Password) when is_binary(Password)->
@@ -152,7 +159,7 @@ handle_call(reconnect, _From, #state{server=Server,host=Host, port=Port, usernam
 %    ?INFO("reconnect :~p", [State]),
     {ok, Socket, ConnState} = connect(Host, Port, Username, Password),
     case ConnState of
-        disconnect ->
+        disconnect -> 
             ?ERROR("reconnect fail, tcp:~p, ~p", [self(),State]),
             Server ! {reconnect, fail, self()};
         connected ->
@@ -179,6 +186,7 @@ handle_cast({login_state, LoginState}, State) ->
     ?WARNING("login state ...~p, ~p", [LoginState, State]),
     case LoginState of
         succ -> clean_tl1_table(State);
+        ignore -> clean_tl1_table(State);
         fail -> ok
     end,
     {noreply, State#state{login_state = LoginState}};
@@ -198,7 +206,8 @@ handle_cast({send, Pct}, #state{server = Server, login_state = fail} = State) ->
     send_failed(Server, Pct, {login_failed, State}),
     {noreply, State};
 
-handle_cast({send, Pct}, #state{count = Count, tl1_table = Tl1Table,conn_num = ConnNum} = State) when ConnNum > ?MAX_CONN ->
+handle_cast({send, Pct}, #state{count = Count, tl1_table = Tl1Table,conn_num = ConnNum, max_conn=MaxConn} = State)
+        when ConnNum > MaxConn ->
     NewId = get_next_id(Count),
     NewPct = Pct#pct{id = NewId},
     ets:insert(Tl1Table, NewPct),
@@ -234,9 +243,22 @@ handle_info({tcp_closed, Socket}, #state{server = Server, socket = Socket} = Sta
 handle_info(shakehand, #state{conn_state = connected} = State) ->
     ?INFO("send shakehand:~p, ~p",[self(),State]),
     send_tcp(self(), "SHAKEHAND:::shakehand::;"),
-    erlang:send_after(?SHAKEHAND_TIME, self(), shakehand),
+    TimeRef = erlang:send_after(?SHAKEHAND_TIME, self(), shakehand),
+    put(shakehand, TimeRef),
     {noreply, State};
 handle_info(shakehand, State) ->
+    erase(shakehand),
+    {noreply, State};
+
+handle_info(check_shakehand, #state{conn_state = connected} = State) ->
+    ?INFO("check_shakehand:~p, ~p",[self(),State]),
+     case get(shakehand) of
+        'undefined' -> ok;
+         TimeRef -> erlang:cancel_timer(TimeRef)
+     end,
+     handle_info(shakehand, State),
+    {noreply, State};
+handle_info(check_shakehand, State) ->
     {noreply, State};
 
 handle_info(Info, State) ->
@@ -325,7 +347,7 @@ check_byte(Data, State) when is_list(Data)->
     lists:foldl(fun(Byte, NewState) ->
         check_byte(Byte, NewState)
     end, State, Data);
-check_byte(Byte, State) ->
+check_byte(Byte, State) ->    
     NowByte = binary:split(Byte, <<">">>, [global]),
     {OtherByte, [LastByte]} = lists:split(length(NowByte)-1, NowByte),
     handle_recv_msg(LastByte, handle_recv_wait(OtherByte, State)).
@@ -343,7 +365,7 @@ tcp_send(Sock, Cmd) ->
 	ok ->
 	    succ;
 	Error ->
-	    ?ERROR("failed sending message to ~n   ~p",[Error]),
+	    ?ERROR("failed sending message to ~n   ~p",[Error]), 
         fail
     end.
 
@@ -375,6 +397,20 @@ handle_recv_wait(<<>>, State) ->
     State;
 handle_recv_wait(Bytes, #state{dict = Dict} = State) when is_binary(Bytes)->
     case (catch etl1_mpd:process_msg(Bytes)) of
+        {ok, #pct{request_id = ReqId, has_field = false, data = NewData} = _Pct}  -> %% for mobile
+            case NewData of
+                {ok, Data} ->
+                     case dict:find(ReqId, Dict) of
+                        {ok, Data0} ->
+							?INFO("find reqid: ~p, ~p", [ReqId, Data0]),
+                            State#state{dict = dict:append_list(ReqId, etl1_mpd:add_record_field(Data0, Data), Dict)};
+                        error ->
+                            ?ERROR("need has field data:~p,~n  ~p",[ReqId, Data]),
+                            State
+                    end;
+                {error, _Reason} ->
+                    State
+            end;
         {ok, #pct{request_id = ReqId, data = NewData} = _Pct}  ->
             case NewData of
                 {ok, Data} ->
@@ -409,7 +445,7 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
             end,
             login_state(self(), LoginState),
             State;
-
+            
         {ok, #pct{type = 'alarm', data = {ok, Data}} = Pct}  ->
             Server ! {tl1_trap, self(), Pct#pct{data = Data}},
             State;
@@ -418,15 +454,25 @@ handle_recv_msg(Bytes, #state{server = Server, socket = Socket, username = Usern
             login(Socket, Username, Password),
             Server ! {tl1_tcp, self(), Pct},
             State#state{conn_num = check_tl1_table(State)};
-        {ok, #pct{type = 'output', request_id = ReqId, data = NewData} = Pct}  ->
+        {ok, #pct{type = 'output', request_id = ReqId, has_field = HasField, data = NewData} = Pct}  ->
             AccData = case NewData of
                 {ok, Data} ->
                     case dict:find(ReqId, Dict) of
                         {ok, Data0} ->
 							?INFO("find reqid: ~p, ~p", [ReqId, Data0]),
-                            {ok, Data0 ++ Data};
+                            Data1 = case HasField of
+                                false -> etl1_mpd:add_record_field(Data0, Data);
+                                _ -> Data
+                            end,        
+                            {ok, Data0 ++ Data1};
                         error ->
-                            {ok, Data}
+                            case HasField of
+                               false ->
+                                   ?ERROR("need has field data:~p,~n  ~p",[ReqId, Data]),
+                                   {error, need_field};
+                               _ ->
+                                   {ok, Data}
+                            end
                     end;
                 {error, _Reason} ->
                     {error, _Reason}
@@ -445,3 +491,4 @@ get_next_id(Id) ->
          true ->
             Id + 1
         end.
+
